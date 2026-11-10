@@ -1,0 +1,28 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# dbt
+target/
+dbt_packages/
+logs/
+*.log
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Airbyte local state
+airbyte_data/

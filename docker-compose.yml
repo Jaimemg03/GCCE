@@ -1,0 +1,36 @@
+services:
+  source_db:
+    build:
+      context: ./01_source_system
+      dockerfile: Dockerfile
+    container_name: source_db_container
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-source_talento}
+      POSTGRES_USER: ${POSTGRES_USER:-src_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-src_admin_pass_local_2026}
+      SRC_WRITER_USER: ${SRC_WRITER_USER:-src_writer}
+      SRC_WRITER_PASSWORD: ${SRC_WRITER_PASSWORD:-src_writer_pass_local_2026}
+      SRC_READER_USER: ${SRC_READER_USER:-src_reader}
+      SRC_READER_PASSWORD: ${SRC_READER_PASSWORD:-src_reader_pass_local_2026}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - source_pg_data:/var/lib/postgresql/data
+      - ./01_source_system/data_sources:/data_sources:ro
+    networks:
+      - bi_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-src_admin} -d ${POSTGRES_DB:-source_talento}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  source_pg_data:
+    name: source_pg_data
+
+networks:
+  bi_network:
+    name: bi_network
+    driver: bridge

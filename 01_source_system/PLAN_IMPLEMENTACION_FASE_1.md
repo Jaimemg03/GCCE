@@ -68,7 +68,7 @@ Al finalizar la fase:
 A fecha de este plan:
 
 ```text
-01_erp_simulado/
+01_source_system/
 ├── README.md
 ├── PLAN_IMPLEMENTACION_FASE_1.md
 ├── data_sources/          # 10 CSV reales ya descargados
@@ -139,11 +139,10 @@ Además, en la raíz del repositorio se añadirá el servicio `source_db` dentro
 
 **Qué hacer**
 
-1. Renombrar la carpeta actual `01_erp_simulado/` a `01_source_system/`, incluyendo `README.md`, `PLAN_IMPLEMENTACION_FASE_1.md` y `data_sources/`.
-2. Verificar que Docker y Docker Compose están disponibles.
-3. Crear `.env.example` con las variables de conexión y contraseñas de roles.
-4. Añadir `.env` al `.gitignore`.
-5. Definir convenciones:
+1. Verificar que Docker y Docker Compose están disponibles.
+2. Crear `.env.example` con las variables de conexión y contraseñas de roles.
+3. Añadir `.env` al `.gitignore`.
+4. Definir convenciones:
    - Nombres de tablas en `snake_case`.
    - Claves primarias con sufijo `_id`.
    - Timestamps en `TIMESTAMPTZ`.

@@ -21,7 +21,7 @@ El flujo de datos se divide en cuatro capas lógicas y persistentes gestionadas 
            [ Modelos Analíticos / Data Marts ]
 ```
 
-1. **`01_erp_simulado/`**: Contenedor PostgreSQL transaccional que simula el ERP de origen y almacena las tablas de referencia y datos sintéticos.
+1. **`01_source_system/`**: Contenedor PostgreSQL transaccional que simula el ERP de origen y almacena las tablas de referencia y datos sintéticos.
 2. **`02_airbyte_ingesta/`**: Configuración y orquestación de Airbyte para replicar los datos hacia la zona de almacenamiento en crudo, gestionando permisos de lectura y escritura.
 3. **`03_raw_database/`**: Contenedor PostgreSQL de destino (*Landing Zone*) con persistencia de datos.
 4. **`04_dbt_transformaciones/`**: Proyecto dbt enfocado en la limpieza (`staging`), deduplicación por última versión (`intermediate`) y modelado dimensional (`marts`) para el cálculo de KPIs.

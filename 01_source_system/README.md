@@ -9,7 +9,7 @@ Este directorio contiene todo lo necesario para desplegar el contenedor transacc
 
 ## 📂 Estructura de Directorios Interna
 ```text
-01_erp_simulado/
+01_source_system/
 ├── Dockerfile                  # Configuración personalizada de la imagen de PostgreSQL
 ├── init-scripts/               # Scripts SQL ejecutados automáticamente al inicializar la BD
 │   ├── 01_create_tables.sql    # DDL del ERP simulado y tablas de staging
@@ -24,7 +24,7 @@ Este directorio contiene todo lo necesario para desplegar el contenedor transacc
 
 ## 📊 Fuentes de Datos Referenciadas
 
-Todas las rutas son relativas a `01_erp_simulado/data_sources/`. Los nombres de fichero se muestran **exactamente** como están en el repositorio (incluyen espacios y paréntesis), por lo que deben citarse entre comillas en scripts SQL/Python.
+Todas las rutas son relativas a `01_source_system/data_sources/`. Los nombres de fichero se muestran **exactamente** como están en el repositorio (incluyen espacios y paréntesis), por lo que deben citarse entre comillas en scripts SQL/Python.
 
 | Fichero exacto en el repositorio | Fuente / Organismo | Enlace de acceso / descarga | Formato y particularidades | Granularidad | Motivo principal / KPI |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -44,7 +44,7 @@ Todas las rutas son relativas a `01_erp_simulado/data_sources/`. Los nombres de 
 ## 🔗 Trazabilidad en el Pipeline
 
 ```text
-01_erp_simulado/data_sources/*.csv
+01_source_system/data_sources/*.csv
         │  (carga inicial - Fase 1)
         ▼
 PostgreSQL 1 (ERP + tablas de referencia)

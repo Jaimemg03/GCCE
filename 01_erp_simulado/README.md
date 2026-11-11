@@ -36,6 +36,8 @@ Todas las rutas son relativas a `01_erp_simulado/data_sources/`. Los nombres de 
 | `(Datos Internos) Datos Propios del ISTAC - Empleo registrado según divisiones de actividad económica.csv` | ISTAC (Canarias) | [Datos Abiertos ISTAC](https://www.gobiernodecanarias.org/istac/) | UTF-8, separador `,`, formato ancho, 1999–2008 | Trimestre × división de actividad | Series históricas de empleo desglosadas por divisiones |
 | `(Datos Internos) Datos Propios del ISTAC - Empleo registrado según situaciones en el empleo.csv` | ISTAC (Canarias) | [Datos Abiertos ISTAC](https://www.gobiernodecanarias.org/istac/) | UTF-8, separador `,`, formato ancho, 1999–2026 T2 | Trimestre × situación laboral | Evaluación de asalariados y autónomos en Canarias |
 | `(Datos Externos ) 5mb25. Afiliados extranjeros por RG y RETA, CCAA, seccion CNAE 25 y UEnoUE - Seg Social (desde ene-26).csv` | Seguridad Social (TGSS) | [BBDD Estadísticas TGSS](https://w6.seg-social.es/PXWeb/pxweb/es/) | UTF-8, separador `;`, CRLF, ~181 filas, columnas muy largas | Periodo × CCAA × sección CNAE × régimen × UE/no UE | Aislar el sector TIC (CNAE Sección J/K) para talento tecnológico |
+| `(Datos Externos) Salarios Tecnológicos - Kaggle.csv` | Kaggle (Adil Shamim) | [Data Science, AI & ML Job Salaries in 2025](https://www.kaggle.com/datasets/adilshamim8/salaries-for-data-science-jobs) | UTF-8 con BOM (`utf-8-sig`), separador `,`, LF, ~151.445 filas, formato largo (una fila por salario) | Año × nivel de experiencia × tipo de empleo × puesto × país de residencia/empresa × modalidad remota | Benchmark salarial de perfiles tecnológicos; brecha salarial y ratio salario/coste de vida |
+| `(Datos Externos) Datos de Emigración - INE.csv` | INE | [PERE - Población Española Residente en el Extranjero (tabla 79678)](https://www.ine.es/jaxiT3/Tabla.htm?L=0&t=79678) | UTF-8 con BOM (`utf-8-sig`), separador `;`, CRLF, ~4.043.520 filas, formato largo, totales con separador de miles y celdas vacías `""` | Año × país de residencia / CCAA / provincia × sexo × lugar de nacimiento | Stock de españoles residentes en el extranjero; proxy de emigración/fuga de talento y saldo neto |
 
 ---
 
@@ -60,8 +62,8 @@ Data Marts / KPIs
 
 | KPI | Fuentes implicadas |
 | :--- | :--- |
-| Tasa de Saldo Neto de Talento | TGSS (`3mb...` y `5mb25...`), EPA, ISTAC |
-| Ratio Salario / Coste de Vida | Kaggle (Numbeo) + salarios del ERP simulado |
+| Tasa de Saldo Neto de Talento | TGSS (`3mb...` y `5mb25...`), EPA, ISTAC, PERE (`Datos de Emigración - INE`) |
+| Ratio Salario / Coste de Vida | Kaggle (Numbeo) + Salarios Tecnológicos (Kaggle) |
 | Absorción de Perfiles Junior | Eurostat (alta tecnología), EPA, ISTAC CNAE-25 |
 
 ---
@@ -71,6 +73,8 @@ Data Marts / KPIs
 - Los CSV de TGSS, EPA e ISTAC usan **formatos anchos y cabeceras multinivel**; se normalizarán en `staging`.
 - El fichero `3mb...` requiere decodificación **ISO-8859-1**; el resto está en UTF-8.
 - EPA e ISTAC usan **coma decimal**; el tipado se resolverá en dbt.
+- El fichero de emigración del INE usa **separador de miles** (`.`) y celdas vacías (`""`); ambos deben conservarse como texto en la carga Raw.
+- El fichero de salarios conserva `salary` y `salary_currency` originales; para comparaciones homogéneas se usará `salary_in_usd` en dbt.
 - En la Landing Zone (`03_raw_database`) los datos se conservarán como texto crudo; la limpieza y el tipado corresponden a dbt.
 - Los nombres de fichero contienen espacios (incluidos dobles), paréntesis y espacios antes de la extensión; deben referenciarse entre comillas en scripts de carga.
 

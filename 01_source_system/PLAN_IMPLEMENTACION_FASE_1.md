@@ -77,6 +77,7 @@ A fecha de este plan:
 ├── init-scripts/          # 00_bootstrap_roles.sh + 01..04 SQL implementados
 ├── loaders/
 │   ├── load_sources_raw.py
+│   ├── complete_export_dimensions.py
 │   └── requirements.txt
 └── synthetic_data/        # pendiente de implementación SDV
 ```
@@ -101,6 +102,7 @@ El servicio `source_db` ya está declarado en `docker-compose.yml`. La capa Raw 
 │   └── 04_grants.sql
 ├── loaders/
 │   ├── load_sources_raw.py
+│   ├── complete_export_dimensions.py
 │   └── requirements.txt
 ├── synthetic_data/
 │   ├── metadata.json
@@ -129,6 +131,7 @@ Además, en la raíz del repositorio se añadirá el servicio `source_db` dentro
 | Usar tipos SQL nativos (`TEXT`, `INTEGER`, `NUMERIC`, `DATE`) | El tipado físico se resuelve en la carga Raw; dbt solo aplica reglas de negocio. |
 | Guardar las cabeceras originales en `src.dataset_files.header_lines` | Conserva los nombres de campo exactos, incluidas cabeceras multinivel. |
 | Ignorar las filas de cabecera en la carga | Las cabeceras se guardan como metadatos; no se insertan como filas de datos. |
+| Completar las geografías exportadas por bloques en un paso separado | El loader Raw conserva el CSV íntegro; el relleno es una corrección de dimensión explícita, validada e idempotente, que no altera ninguna otra columna. |
 | Identificar cada registro con `record_origin` | Permite distinguir datos reales de datos sintéticos sin mezclar su procedencia. |
 | Añadir `synthetic_run_id` y `synthetic_period` | Trazabilidad de cada proyección temporal; el modelo utilizado se registra en `audit.load_log.model_name`. |
 | Usar `PARSynthesizer` para series temporales | Modela secuencias y respeta el orden temporal de las series agregadas. |
@@ -337,6 +340,60 @@ row_id | load_id | row_number | periodo | ccaa  | total_regimen_total_sexo_total
 - Las celdas vacías de columnas numéricas son `NULL`.
 - `audit.load_log` refleja `status = 'success'` para los 10 ficheros (o `failed` con `error_message` si alguno no se puede leer).
 - Relanzar el loader no duplica registros.
+
+---
+
+### Paso 5 bis — Completar las dimensiones geográficas exportadas por bloques
+
+**Detección**
+
+Al perfilar las columnas vacías de la capa Raw se detectaron dos tablas en las que `geography` solo viene informada en la primera fila de cada bloque; el resto de filas del bloque la heredan de forma implícita. El CSV no repite el valor, pero la dimensión es imprescindible para preparar las series temporales.
+
+| Tabla Raw | Filas reales | `geography` vacía | Bloques | Tamaño del bloque |
+| :--- | ---: | ---: | ---: | ---: |
+| `src.istac_employment_cnae_raw` | 990 | 981 | 9 | 110 filas (105 actividades + 5 duplicados exactos) |
+| `src.istac_employment_status_raw` | 315 | 210 | 105 | 3 filas (`Total` + 2 situaciones) |
+
+El resto de columnas vacías detectadas son legítimas y **no se rellenan**:
+
+- Jerarquía geográfica de PERE (`comunidades_y_ciudades_autonomas`, `provincias`, `total`), donde cada nivel tiene su propia granularidad y sus propias ausencias.
+- Metadatos y flags de Eurostat (`time_label`, `obs_value_label`, `conf_status`, `obs_flag`, etc.).
+- Nulos numéricos reales de ISTAC (series sin dato en un periodo concreto).
+
+**Qué hacer**
+
+1. Crear `loaders/complete_export_dimensions.py` con un catálogo `FILL_RULES` que declare, por tabla, la columna de geografía, la clave de serie, el número de bloques esperado y el tamaño de cada bloque.
+2. Validar antes de escribir:
+   - la columna `geography` existe y es `TEXT`;
+   - no hay geografías compuestas solo por espacios;
+   - el número de filas reales es múltiplo del tamaño de bloque;
+   - cada bloque posicional contiene una única geografía no vacía;
+   - cada bloque repite la misma secuencia de la clave de serie (`activity` o `employment_status`).
+3. Rellenar solo las celdas `NULL` o `''` de `geography` en filas con `record_origin = 'real'`. Nunca se sobrescribe un valor existente ni se tocan filas sintéticas.
+4. Calcular una huella MD5 de todas las columnas salvo `geography` (incluidas las filas sintéticas) antes y después del `UPDATE`. Si la huella cambia, hacer `ROLLBACK`.
+5. Ejecutar por defecto en dry-run y escribir solo con `--apply`. El script es idempotente.
+
+**Validación realizada**
+
+- `istac_employment_cnae`: 981 celdas completadas, 9 geografías distintas y 0 celdas vacías restantes.
+- `istac_employment_status`: 210 celdas completadas, 105 geografías distintas y 0 celdas vacías restantes.
+- La huella de columnas no objetivo no cambia en ninguna de las dos tablas.
+- Una segunda ejecución detecta 0 celdas pendientes en ambas tablas.
+- Los 45 duplicados exactos de `istac_employment_cnae_raw` no se eliminan en este paso; se deduplicarán en la extracción SDV (`prepare_own_data.py`).
+
+**Comandos**
+
+```bash
+# Simulación (comportamiento por defecto)
+python 01_source_system/loaders/complete_export_dimensions.py
+
+# Aplicar el relleno
+python 01_source_system/loaders/complete_export_dimensions.py --apply
+
+# Procesar una sola tabla
+python 01_source_system/loaders/complete_export_dimensions.py \
+  --dataset istac_employment_cnae --apply
+```
 
 ---
 
@@ -772,6 +829,7 @@ Los nombres originales de TGSS e ISTAC contienen espacios, acentos, paréntesis,
 - `emigration_pere.total` se mantiene como `TEXT` porque el CSV usa separador de miles y celdas `""`; el parseo numérico se hará en la extracción SDV o en dbt.
 - `DATE` está previsto en el conversor del loader, pero ninguna fuente actual lo necesita.
 - Las celdas vacías en columnas `INTEGER`/`NUMERIC` se insertan como `NULL`. En `TEXT` se conserva la cadena original.
+- Las exportaciones ISTAC de CNAE y situaciones solo informan `geography` en la primera fila de cada bloque. La capa Raw conserva esas celdas vacías y el Paso 5 bis las completa de forma controlada.
 
 ---
 
@@ -851,6 +909,8 @@ La extracción no modifica los CSV ni las filas Raw. Solo genera una vista tempo
 - [ ] Los nombres que superan 63 bytes se truncan con sufijo hash y las cabeceras completas están en `src.dataset_files.header_lines`.
 - [ ] Los 10 CSV se cargan sin errores y con recuentos validados (PERE requiere `git lfs pull`).
 - [ ] Relanzar el loader sin `--force` no duplica filas (idempotencia por SHA-256).
+- [ ] `geography` está completo en `src.istac_employment_cnae_raw` (9 geografías) y `src.istac_employment_status_raw` (105 geografías).
+- [ ] El relleno de `geography` es idempotente y no altera ninguna otra columna ni fila sintética.
 - [ ] El SHA-256 de cada CSV coincide con el del fichero original.
 - [ ] Las cabeceras originales están preservadas en `src.dataset_files.header_lines`.
 - [ ] Ningún CSV ha sido modificado, renombrado ni transformado.
@@ -875,6 +935,8 @@ La extracción no modifica los CSV ni las filas Raw. Solo genera una vista tempo
 | Cabeceras multinivel en EPA/ISTAC | Interpretación errónea de columnas | Aplanar periodo + medida en el nombre físico; conservar las cabeceras originales en `header_lines` |
 | Coma decimal en EPA | Valores alterados si se convierten mal | `decimal_style: comma` en el catálogo: eliminar puntos de miles y cambiar coma por punto antes de `Decimal` |
 | Series anchas con periodos en columnas | Dificultad para proyectar periodos futuros | Extraer en memoria a formato largo, entrenar PAR e insertar en las columnas físicas; añadir columnas de periodo con `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` |
+| Relleno de geografía que cruza límites de bloque | Asignar una geografía incorrecta a una serie | Agrupar por tamaño de bloque validado, comprobar que cada bloque repite la secuencia de la clave de serie y comparar la huella de columnas no objetivo antes/después |
+| Reejecución del relleno de geografía | Sobrescribir valores o duplicar trabajo | Actualizar solo celdas `NULL`/`''` de filas reales, validar el resultado y dejar el dry-run como comportamiento por defecto |
 | Filas con número de columnas inesperado | Inserción parcial o corrupta | El loader valida `len(row)` contra el máximo índice del catálogo y aborta el dataset; `audit.load_log` registra `failed` |
 | Fichero PERE como puntero Git LFS | Carga fallida con error poco claro | El loader detecta el puntero y lanza un error accionable: `git lfs pull` |
 | Entrenamiento PAR lento o con alto consumo de memoria | Bloqueo del entorno local | Ajustar épocas, tamaño de lote y horizonte; empezar con un dataset y escalar |
@@ -908,6 +970,12 @@ python 01_source_system/loaders/load_sources_raw.py
 
 # Recargar un dataset concreto
 python 01_source_system/loaders/load_sources_raw.py --dataset tech_salaries --force
+
+# Completar las geografías exportadas por bloques (dry-run por defecto)
+python 01_source_system/loaders/complete_export_dimensions.py
+
+# Aplicar el relleno de geografía
+python 01_source_system/loaders/complete_export_dimensions.py --apply
 
 # Verificar la carga
 psql "$DATABASE_URL" -c "SELECT dataset_name, row_count, sha256, loaded_at FROM src.dataset_files ORDER BY dataset_name;"
@@ -944,6 +1012,7 @@ psql "host=localhost port=5432 dbname=source_talento user=src_reader password=..
 | 3 | Crear el contenedor `source_db` y la orquestación | Hecho |
 | 4 | Implementar los scripts SQL de inicialización | Hecho |
 | 5 | Cargar los CSV en columnas físicas tipadas | Hecho |
+| 5 bis | Completar las dimensiones geográficas exportadas por bloques | Hecho |
 | 6 | Preparar las series temporales y los metadatos SDV | Pendiente |
 | 7 | Entrenar SDV y simular los registros futuros | Pendiente |
 | 8 | Insertar el anexo sintético y validar | Pendiente |

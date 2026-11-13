@@ -28,6 +28,7 @@ Este directorio contiene todo lo necesario para desplegar el contenedor PostgreS
 │   └── 04_grants.sql                # Permisos por rol
 ├── loaders/
 │   ├── load_sources_raw.py          # Carga idempotente de los 10 CSV
+│   ├── complete_export_dimensions.py # Completa geografías vacías por bloques
 │   └── requirements.txt             # psycopg2-binary, python-dotenv
 ├── synthetic_data/                  # Proyección temporal SDV (pendiente)
 │   ├── config.yaml
@@ -141,6 +142,7 @@ Data Marts / KPIs
 - **Cabeceras multinivel:** EPA, ISTAC CNAE25 y TGSS 5mb25 tienen 2 filas de cabecera; `3mb...` tiene título + línea vacía + cabecera (3 filas). ISTAC status y divisiones tienen 1 fila de cabecera.
 - **Coma decimal:** el loader convierte los valores EPA (`1.234,56`) a `NUMERIC` (`1234.56`). El resto de medidas numéricas usan punto decimal.
 - **Celdas vacías:** en columnas `INTEGER`/`NUMERIC` se insertan como `NULL`; en columnas `TEXT` se conserva la cadena original.
+- **Geografía por bloques (ISTAC):** en `istac_employment_cnae_raw` y `istac_employment_status_raw` el CSV solo informa `geography` en la primera fila de cada bloque. `complete_export_dimensions.py` rellena esas celdas vacías con validación de bloques, dry-run por defecto e idempotencia; no toca filas sintéticas ni ninguna otra columna.
 - **PERE:** `total` se mantiene como `TEXT` para conservar el separador de miles y las celdas `""`; `periodo` se tipa como `INTEGER`.
 - **Salarios:** se conservan `salary` y `salary_currency` originales; `salary_in_usd` queda disponible para comparaciones homogéneas en dbt.
 - **Ficheros inmutables:** el loader abre los CSV en modo lectura y nunca escribe en `data_sources/`.
@@ -165,6 +167,16 @@ Data Marts / KPIs
    ```bash
    python 01_source_system/loaders/load_sources_raw.py --dataset tech_salaries --force
    ```
+
+2 bis. **Completar las geografías exportadas por bloques (ISTAC):**
+   ```bash
+   # Simulación: no escribe nada
+   python 01_source_system/loaders/complete_export_dimensions.py
+
+   # Aplicar el relleno
+   python 01_source_system/loaders/complete_export_dimensions.py --apply
+   ```
+   El script rellena solo celdas vacías de `geography` en `src.istac_employment_cnae_raw` (9 bloques × 110 filas) y `src.istac_employment_status_raw` (105 bloques × 3 filas). Valida la estructura de los bloques, verifica que ninguna otra columna cambia y es idempotente.
 
 3. **Verificar la carga:**
    ```sql
